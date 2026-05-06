@@ -1,16 +1,30 @@
 # CLAUDE.md — Strug Platform TS
 
 ## Project Overview
-Strug Platform TS — [one-line description to fill in]
+
+TypeScript monorepo for cross-product Strug City packages.
+Initial package: `@strugcity/calendar-primitives` (ICS parsing, ETag fetching, subscription state, change detection).
 
 ## Tech Stack
-- typescript
+- TypeScript 5.x
+- npm workspaces
+- Vitest (unit tests)
+- ESLint 9 + typescript-eslint
 
 ## Build & Lint Commands
-- [fill in]
+- `npm run build` — compile all packages (`tsc --build`)
+- `npm run lint` — ESLint all package src files
+- `npm run typecheck` — typecheck without emitting
+- `npm test` — run all tests (`vitest run`)
+- `npm run test:watch` — watch mode
 
 ## Critical Rules
-- [fill in project-specific rules]
+- This is a shared library. Any breaking change requires a version bump **before** any consumer repo imports the new version.
+- All exported types and functions must have JSDoc comments.
+- Phase 2 surfaces (GCal OAuth, Apple CalDAV, outbound feed) are **typed and stubbed only**. Do not implement until a consuming product opens an issue requesting it.
+- Before adding any dependency, verify it does not break Metro bundler (Expo/React Native) compatibility — check bundle size and ESM/CJS support.
+- SSRF guard is **non-negotiable** on all URL-fetching code. See `packages/calendar-primitives/src/fetching/ssrf.ts`.
+- The `dist/` directory is never committed — it is built on publish.
 
 ---
 
