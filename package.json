@@ -6,7 +6,7 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "lint": "eslint packages/*/src/**/*.ts",
+    "lint": "eslint --no-error-on-unmatched-pattern packages/*/src/**/*.ts",
     "typecheck": "tsc --build --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
