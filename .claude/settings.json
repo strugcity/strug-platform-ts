@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "review PR|audit PR|fix review|PR review|review changes|code review",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '## TDD PR Audit Reminder\\n\\nBefore starting a reactive review, check if this PR qualifies for a TDD audit:\\n- >= 5 changed files\\n- Security-sensitive code (RLS, auth, validation)\\n- >= 1 prior review round\\n- Cross-module changes (types, helpers, DB schema)\\n\\nIf ANY condition is met, use the TDD PR Audit protocol:\\n  Protocol: strug-standards/standards/tdd-pr-audit.md\\n  Prompt: strug-standards/prompts/tdd-pr-audit.prompt.md\\n\\nKey principle: Write failing tests BEFORE implementing fixes. Every fix must have a test.'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/rktra/Documents/Projects/strug-standards/scripts/sync-worktree-settings.js --path C:/Users/rktra/Documents/Projects/strug-platform-ts"
+          }
+        ]
+      }
+    ]
+  }
+}
