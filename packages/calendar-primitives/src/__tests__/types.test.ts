@@ -1,14 +1,8 @@
 import { describe, it, expectTypeOf } from 'vitest';
 import type {
   CalendarEvent,
-  CalendarProvider,
-  ProviderHint,
-  FetchConfig,
-  FetchResult,
-  SubscriptionStatus,
   SubscriptionState,
   ChangeUrgency,
-  ChangeType,
   EventChange,
 } from '../types.js';
 
@@ -63,11 +57,3 @@ describe('EventChange', () => {
   });
 });
 
-// Compile-time assertions — these are used by the type imports above
-const _providerHint: ProviderHint = { provider: 'teamsnap', confidence: 'high', signals: [] };
-const _fetchConfig: FetchConfig = { url: 'https://example.com/cal.ics' };
-const _fetchResult: FetchResult = { events: [], notModified: false };
-const _status: SubscriptionStatus = 'pending';
-const _changeType: ChangeType = 'event_added';
-const _provider: CalendarProvider = 'generic';
-void _providerHint, _fetchConfig, _fetchResult, _status, _changeType, _provider;

@@ -12,7 +12,7 @@ DTEND:20260601T160000Z
 END:VEVENT
 END:VCALENDAR`;
 
-function mockFetch(status: number, body: string, headers: Record<string, string> = {}) {
+function mockFetch(status: number, body: string, headers: Record<string, string> = {}): void {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     status,
     text: () => Promise.resolve(body),
