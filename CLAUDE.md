@@ -42,6 +42,24 @@ This project's Anti-Strug role: **platform-component**
 
 Agents create only at the **Issue** level. Never create Initiatives, Milestones, or Cycles. Pre-create check: search for existing issue first — no duplicates. Full taxonomy and trigger rules: `strug-standards/standards/linear-playbook.md`
 
+## PR Closing Block (Required)
+
+Every PR description must end with a closing block — one line per Linear issue this PR resolves:
+
+```
+Closes SCE-123
+Closes SCE-456
+```
+
+Linear's GitHub integration reads these lines on merge and automatically transitions the linked issues to Done. Without this block, tickets stay open after merge and must be closed manually.
+
+## Design System (G-2)
+
+- **Canonical Source:** `{{DESIGN_SYSTEM_CANON_PATH}}`
+- **Derived Artifacts:** `{{DESIGN_SYSTEM_DERIVED_PATHS}}`
+
+Agents must read the canonical source before building UI. Derived artifacts (token files, generated CSS, compiled outputs) omit the invariants the canon encodes and are insufficient inputs on their own.
+
 ## QA Gates (Non-Negotiable)
 
 Before committing or pushing, run:
