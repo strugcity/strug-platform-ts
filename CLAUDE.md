@@ -32,15 +32,15 @@ Initial package: `@strugcity/calendar-primitives` (ICS parsing, ETag fetching, s
 
 ## Naming & Routing
 
-Use canonical product names only — never deprecated names. Full roster: `strug-standards/standards/naming-roster.md`
+Use canonical product names only — never deprecated names. Full roster: `C:/Users/rktra/Documents/Projects/strug-standards/standards/naming-roster.md`
 
-When producing PRDs, architecture docs, or SOPs, route to Notion immediately (not as follow-up). Full routing table: `strug-standards/standards/notion-routing.md`
+When producing PRDs, architecture docs, or SOPs, route to Notion immediately (not as follow-up). Full routing table: `C:/Users/rktra/Documents/Projects/strug-standards/standards/notion-routing.md`
 
 This project's Anti-Strug role: **platform-component**
 
 ## Linear (Enforced)
 
-Agents create only at the **Issue** level. Never create Initiatives, Milestones, or Cycles. Pre-create check: search for existing issue first — no duplicates. Full taxonomy and trigger rules: `strug-standards/standards/linear-playbook.md`
+Agents create only at the **Issue** level. Never create Initiatives, Milestones, or Cycles. Pre-create check: search for existing issue first — no duplicates. Full taxonomy and trigger rules: `C:/Users/rktra/Documents/Projects/strug-standards/standards/linear-playbook.md`
 
 ## PR Closing Block (Required)
 
@@ -53,13 +53,6 @@ Closes SCE-456
 
 Linear's GitHub integration reads these lines on merge and automatically transitions the linked issues to Done. Without this block, tickets stay open after merge and must be closed manually.
 
-## Design System (G-2)
-
-- **Canonical Source:** `{{DESIGN_SYSTEM_CANON_PATH}}`
-- **Derived Artifacts:** `{{DESIGN_SYSTEM_DERIVED_PATHS}}`
-
-Agents must read the canonical source before building UI. Derived artifacts (token files, generated CSS, compiled outputs) omit the invariants the canon encodes and are insufficient inputs on their own.
-
 ## QA Gates (Non-Negotiable)
 
 Before committing or pushing, run:
@@ -71,7 +64,7 @@ Before committing or pushing, run:
 
 If a check fails: **stop, fix it, then commit.** Do not push broken code.
 
-Parallel agents must use `isolation: "worktree"` — see `strug-standards/standards/multi-task-work.md`.
+Parallel agents must use `isolation: "worktree"` — see `C:/Users/rktra/Documents/Projects/strug-standards/standards/multi-task-work.md`.
 
 ## CI Failure Protocol
 
@@ -94,11 +87,11 @@ Never fix from Copilot/AI summaries. Never guess at the error.
 
 ## Visual Verification
 
-Frontend changes require visual verification before review. Protocol: `strug-standards/standards/visual-test-guidelines.md`
+Frontend changes require visual verification before review. Protocol: `C:/Users/rktra/Documents/Projects/strug-standards/standards/visual-test-guidelines.md`
 
 ## Standards Reference
 
-Full SOP: `strug-city/strug-standards` repo
-TDD PR Audit protocol: `strug-standards/standards/tdd-pr-audit.md`
+Full SOP: `C:/Users/rktra/Documents/Projects/strug-standards/`
+TDD PR Audit protocol: `C:/Users/rktra/Documents/Projects/strug-standards/standards/tdd-pr-audit.md`
 
 <!-- STRUG-STANDARDS-END -->
