@@ -4,6 +4,10 @@
 node_modules/
 *.log
 .parallel/
-.claude/settings.local.json
 **/dist/
 *.tsbuildinfo
+
+# BEGIN strug-standards managed — .claude local artifacts
+.claude/settings.local.json
+.claude/worktrees/
+# END strug-standards managed
