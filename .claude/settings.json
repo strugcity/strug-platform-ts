@@ -9,6 +9,18 @@
             "command": "echo '## TDD PR Audit Reminder\\n\\nBefore starting a reactive review, check if this PR qualifies for a TDD audit:\\n- >= 5 changed files\\n- Security-sensitive code (RLS, auth, validation)\\n- >= 1 prior review round\\n- Cross-module changes (types, helpers, DB schema)\\n\\nIf ANY condition is met, use the TDD PR Audit protocol:\\n  Protocol: strug-standards/standards/tdd-pr-audit.md\\n  Prompt: strug-standards/prompts/tdd-pr-audit.prompt.md\\n\\nKey principle: Write failing tests BEFORE implementing fixes. Every fix must have a test.'"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs'),path=require('path');try{const f=path.join('/Users/ryanknollmaier/Documents/Projects/strug-platform-ts','.claude/session-branch');if(fs.existsSync(f)){fs.unlinkSync(f);}}catch(e){process.stderr.write('[session-branch] WARNING: '+e.message+'\\\\n');}\""
+          },
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" check-main-worktree.js"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -17,7 +29,46 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rktra/Documents/Projects/strug-standards/scripts/sync-worktree-settings.js --path C:/Users/rktra/Documents/Projects/strug-platform-ts"
+            "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" sync-worktree-settings.js --path @MAIN_ROOT@"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs'),path=require('path'),cp=require('child_process');try{const f=path.join('/Users/ryanknollmaier/Documents/Projects/strug-platform-ts','.claude/session-branch');if(!fs.existsSync(f)){const b=cp.execSync('git branch --show-current',{encoding:'utf8'}).trim();if(b&&b!=='main'){fs.mkdirSync(path.dirname(f),{recursive:true});fs.writeFileSync(f,b);}}}catch(e){process.stderr.write('[session-branch] WARNING: '+e.message+'\\\\n');}\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" prevent-main-root-git-ops.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" prevent-main-root-file-writes.js"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" doctor-worktrees.js --path @MAIN_ROOT@"
           }
         ]
       }

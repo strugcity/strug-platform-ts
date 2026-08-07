@@ -15,17 +15,30 @@ while read local_ref local_sha remote_ref remote_sha; do
   fi
 
   if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-    BASE=$(git merge-base HEAD origin/main 2>/dev/null || echo "")
-    if [ -z "$BASE" ]; then
-      RANGE="HEAD"
-    else
+    BASE=$(git merge-base "$local_sha" origin/main 2>/dev/null)
+    if [ -n "$BASE" ]; then
       RANGE="$BASE..$local_sha"
+      CHANGED=$(git diff --name-only "$RANGE" 2>/dev/null) || {
+        echo "  ✗ BLOCKED: git diff failed — cannot determine changed files. Aborting for safety."
+        exit 1
+      }
+    else
+      # No common ancestor with origin/main (new repo or disconnected history).
+      # Collect all files touched in any commit reachable from this SHA.
+      RANGE=""
+      RAW_LOG=$(git log --name-only --pretty=format: "$local_sha" 2>&1) || {
+        echo "  ✗ BLOCKED: git log failed — cannot determine changed files. Aborting for safety."
+        exit 1
+      }
+      CHANGED=$(echo "$RAW_LOG" | grep -v '^$' | sort -u || true)
     fi
   else
     RANGE="$remote_sha..$local_sha"
+    CHANGED=$(git diff --name-only "$RANGE" 2>/dev/null) || {
+      echo "  ✗ BLOCKED: git diff failed — cannot determine changed files. Aborting for safety."
+      exit 1
+    }
   fi
-
-  CHANGED=$(git diff --name-only "$RANGE" 2>/dev/null || true)
 
 
   # ── Frontend lint ──────────────────────────────────────────────
@@ -39,6 +52,63 @@ while read local_ref local_sha remote_ref remote_sha; do
       exit 1
     fi
     echo "✅ Frontend lint OK"
+  fi
+
+  # ── Visual verification gate ────────────────────────────────────
+  if [ -n "$FRONTEND_FILES" ]; then
+    VERIFIED_MARKER=".last-verified"
+    echo ""
+    echo "  📱 Frontend changes detected — checking visual verification..."
+
+    if [ ! -f "$VERIFIED_MARKER" ]; then
+      echo ""
+      echo "  ✗ BLOCKED: visual verification required before pushing frontend changes."
+      echo ""
+      echo "  You must:"
+      echo "    1. Start the dev server and verify every affected screen"
+      echo "    2. Write the marker: node -e \"require('fs').writeFileSync('.last-verified', Date.now().toString())\""
+      echo ""
+      echo "  Then push again."
+      echo ""
+      exit 1
+    fi
+
+    if ! command -v node > /dev/null 2>&1; then
+      echo "  ✗ BLOCKED: 'node' is required by this hook but was not found in PATH."
+      exit 1
+    fi
+
+    MARKER_TIME=$(node -e "try{process.stdout.write(require('fs').readFileSync('$VERIFIED_MARKER','utf8').trim())}catch(e){process.stdout.write('0')}" 2>/dev/null || echo "0")
+    # Sanitize: ensure MARKER_TIME is a valid integer (guards against corrupted .last-verified)
+    case "$MARKER_TIME" in
+      ''|*[!0-9]*) MARKER_TIME=0 ;;
+    esac
+
+    # %ct = Unix seconds; append 000 to convert to milliseconds for comparison with Date.now() markers
+    if [ -n "$RANGE" ]; then
+      NEWEST_COMMIT_TIME=$(git log --format="%ct000" "$RANGE" 2>/dev/null | head -1)
+    else
+      NEWEST_COMMIT_TIME=$(git log --format="%ct000" "$local_sha" -1 2>/dev/null)
+    fi
+
+    if [ -z "$NEWEST_COMMIT_TIME" ]; then
+      echo "  ✗ BLOCKED: could not determine commit timestamps. Aborting for safety."
+      exit 1
+    fi
+    case "$NEWEST_COMMIT_TIME" in
+      ''|*[!0-9]*) NEWEST_COMMIT_TIME=0 ;;
+    esac
+
+    if [ "$MARKER_TIME" -lt "$NEWEST_COMMIT_TIME" ]; then
+      echo ""
+      echo "  ✗ BLOCKED: verification marker is older than your most recent commit."
+      echo "  Re-verify after your final code change, then push again."
+      echo ""
+      exit 1
+    fi
+
+    echo "  ✓ Visual verification confirmed"
+    echo ""
   fi
 
 done
