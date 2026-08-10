@@ -66,13 +66,31 @@ if [ "$CURRENT_BRANCH" = "main" ]; then
 fi
 
 # ── Guard: block committing machine-local Claude settings ───────────────────
+# Applies on every branch, including the .claude/ sync-artifact exemption above.
+# >>> guard-parity: settings.local.json — keep byte-identical between
+# templates/pre-commit.template and templates/husky-pre-commit-guard.template
+# (asserted by tests/husky-guard-injection.audit.test.js) >>>
 # .claude/settings.local.json is rewritten per-machine (bypassPermissions) by
 # strug-standards/scripts/sync-worktree-settings.js. Committing it produces
-# perpetual churn; it must stay gitignored + untracked. Applies on every branch
-# (including the .claude/ sync-artifact exemption above).
+# perpetual churn; it must stay gitignored + untracked.
 # --diff-filter=d excludes staged DELETIONS, so committing the recommended
 # `git rm --cached` remediation below is allowed; only additions/modifications block.
-if git diff --cached --name-only --diff-filter=d | grep -qx '\.claude/settings\.local\.json'; then
+#
+# The staged list is captured rather than piped straight into grep: a pipeline's
+# exit status is grep's, and `set -e` does not apply inside an `if` condition, so
+# a failing `git diff --cached` produced empty output, matched nothing, and let
+# the commit through with no message at all. A guard that cannot read the index
+# must block rather than shrug (SCE-2762).
+if ! _strug_staged=$(git diff --cached --name-only --diff-filter=d); then
+  echo ""
+  echo "  ✗ BLOCKED: the strug-standards guard could not read the staged file list."
+  echo "  'git diff --cached --name-only' failed, so whether"
+  echo "  .claude/settings.local.json is staged is unknown — refusing to commit blind."
+  echo "  Bypass deliberately with --no-verify if you know the index is fine."
+  echo ""
+  exit 1
+fi
+if printf '%s\n' "$_strug_staged" | grep -qx '\.claude/settings\.local\.json'; then
   echo ""
   echo "  ✗ BLOCKED: .claude/settings.local.json is machine-local; do not commit it."
   echo "  Untrack it:  git rm --cached .claude/settings.local.json"
@@ -80,3 +98,4 @@ if git diff --cached --name-only --diff-filter=d | grep -qx '\.claude/settings\.
   echo ""
   exit 1
 fi
+# <<< end guard-parity <<<
