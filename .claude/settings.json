@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs'),path=require('path');try{const f=path.join('/Users/ryanknollmaier/Documents/Projects/strug-platform-ts','.claude/session-branch');if(fs.existsSync(f)){fs.unlinkSync(f);}}catch(e){process.stderr.write('[session-branch] WARNING: '+e.message+'\\\\n');}\""
+            "command": "node -e \"const fs=require('fs'),path=require('path'),cp=require('child_process');let r='';try{r=cp.execSync('git rev-parse --show-toplevel',{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch(e){}if(r){try{const f=path.join(r,'.claude/session-branch');if(fs.existsSync(f)){fs.unlinkSync(f);}}catch(e){process.stderr.write('[session-branch] WARNING: '+e.message+'\\\\n');}}\""
           },
           {
             "type": "command",
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs'),path=require('path'),cp=require('child_process');try{const f=path.join('/Users/ryanknollmaier/Documents/Projects/strug-platform-ts','.claude/session-branch');if(!fs.existsSync(f)){const b=cp.execSync('git branch --show-current',{encoding:'utf8'}).trim();if(b&&b!=='main'){fs.mkdirSync(path.dirname(f),{recursive:true});fs.writeFileSync(f,b);}}}catch(e){process.stderr.write('[session-branch] WARNING: '+e.message+'\\\\n');}\""
+            "command": "node -e \"const fs=require('fs'),path=require('path'),cp=require('child_process');try{const r=cp.execSync('git rev-parse --show-toplevel',{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();const f=path.join(r,'.claude/session-branch');if(!fs.existsSync(f)){const b=cp.execSync('git branch --show-current',{encoding:'utf8'}).trim();if(b&&b!=='main'){fs.mkdirSync(path.dirname(f),{recursive:true});fs.writeFileSync(f,b);}}}catch(e){process.stderr.write('[session-branch] WARNING: '+e.message+'\\\\n');}\""
           }
         ]
       }
