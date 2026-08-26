@@ -96,6 +96,37 @@ The main working tree is **read-only for branch work** — it is shared state, a
 - **Any feature/branch work?** `git worktree add .claude/worktrees/<name> <branch>`, then work there.
 - Parallel agents must use `isolation: "worktree"` — see `../strug-standards/standards/multi-task-work.md`.
 
+### Retiring a finished worktree
+
+**Do not retire a worktree by hand, and never from inside it.** Run the tool, from the main root:
+
+```
+node ../strug-standards/scripts/retire-merged-worktrees.js --dry-run   # report only; deletes nothing
+node ../strug-standards/scripts/retire-merged-worktrees.js             # retire what qualifies
+node ../strug-standards/scripts/retire-merged-worktrees.js --repo <path>
+```
+
+It lives in the standards checkout and acts on **any** repo via `--repo`, so it is not copied here — there is one copy to keep correct, not eight.
+
+`--dry-run` deletes nothing, but it is **not inert**: it still proves containment, which fetches `refs/pull/<n>/head` from `origin` into a temp ref. That is deliberate — a dry run that cannot tell you the merge oracle is down is not a safe way to inspect a repo.
+
+**"The PR is merged, so `-D` is safe" is false, and is why this tool exists.** A merged PR says nothing about what the LOCAL branch holds. Twice in one day the local tip was not the merged head, and on its first real run this tool refused a retirement because the branch held 1,028 lines that were never pushed. It proves containment against `refs/pull/<n>/head` every time instead of when someone remembers to.
+
+It retires a worktree only when all of these are PROVEN — never assumed, and a check that could not run is never treated as a pass:
+
+- you are not standing inside the worktree being retired (`--repo` does not make that safe — it re-aims the git operations, not the process)
+- the worktree is clean, and `gh` reported a MERGED PR whose head OID matches the ref actually fetched
+- the local tip is an ancestor of that merged head, and is still the tip at the moment of deletion
+- nothing has the branch checked out — re-established immediately before deleting, because removing the worktree is what frees the branch
+
+Anything it cannot establish *before it touches anything* is reported and **skipped**. If a fact comes apart later — after the worktree is already gone — the line reads `PARTIAL` instead, and the branch is left alone. Either way the run exits non-zero, so a hook reading `$?` can tell "nothing to do" from "the merge oracle was down". A skip that rests on proof — `locked`, `detached HEAD — no branch to retire`, uncommitted work, no merged PR for this branch — is an answer, not a failure, and keeps the run green.
+
+Read the line either way, but do not expect a remedy on all of them. Every `PARTIAL` carries one: the worktree is gone and its branch outlived it, and the line says what to do about that. A `SKIP` that could not establish something usually names only the cause (`could not ask GitHub whether this branch was merged: …`) — fix the cause it names.
+
+If you are inside the worktree you want to retire, leave it first (`ExitWorktree` with action `keep` returns the session to the main root), then run the tool from there.
+
+If node reports `Cannot find module`, you are running it from somewhere that path does not resolve from — see the note at the top of this block. Run it from the repository root; from inside `.claude/worktrees/<name>` it will not resolve. That is the same mistake, caught one step earlier by the wrong error message.
+
 ## CI Failure Protocol
 
 When CI fails:
