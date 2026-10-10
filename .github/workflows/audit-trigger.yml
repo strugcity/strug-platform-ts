@@ -10,6 +10,14 @@ on:
   pull_request_review:
     types: [submitted]
 
+# Declared explicitly so the repository default can stay at `read`. A per-repo
+# `write` default would grant write to every workflow in the repo, including
+# ones that execute PR branch code.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   check-audit-needed:
     runs-on: ubuntu-latest
@@ -20,19 +28,45 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # --paginate is load-bearing: the reviews endpoint returns 30 per
+          # page, so a PR whose CHANGES_REQUESTED reviews land past page 1
+          # would count 0 and skip the label while the job went green.
+          # pipefail is not set by the runner's default shell, so without it a
+          # failed `gh` would still yield a count of 0 through `wc -l`.
+          set -o pipefail
           REVIEW_COUNT=$(gh api \
             repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
-            --jq '[.[] | select(.state == "CHANGES_REQUESTED")] | length')
+            --paginate \
+            --jq '.[] | select(.state == "CHANGES_REQUESTED") | .id' | wc -l | tr -d '[:space:]')
           echo "changes_requested=$REVIEW_COUNT" >> "$GITHUB_OUTPUT"
           echo "PR #${{ github.event.pull_request.number }} has $REVIEW_COUNT CHANGES_REQUESTED reviews"
 
       - name: Add needs-audit label
-        if: steps.count.outputs.changes_requested >= 2
+        if: fromJSON(steps.count.outputs.changes_requested) >= 2
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api \
+          # mktemp, not a fixed /tmp path: on a self-hosted runner with
+          # concurrent job slots a shared path lets one job read another's
+          # error output.
+          LABEL_OUT="$(mktemp)"
+          if gh api \
             repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels \
             -f "labels[]=needs-audit" \
-            --method POST || true
-          echo "Added 'needs-audit' label to PR #${{ github.event.pull_request.number }}"
+            --method POST >"$LABEL_OUT" 2>&1; then
+            echo "Added 'needs-audit' label to PR #${{ github.event.pull_request.number }}"
+          else
+            # Both streams are captured above, and that is the whole point:
+            # `gh api` prints the JSON error body on STDOUT and only a one-line
+            # "gh: <message> (HTTP <code>)" summary on STDERR. Grepping stderr
+            # alone — as this step used to — can never see an error code, so
+            # the tolerance below was unreachable and a duplicate label failed
+            # the workflow.
+            if grep -q "already_exists" "$LABEL_OUT"; then
+              echo "Label 'needs-audit' already present on PR #${{ github.event.pull_request.number }}"
+            else
+              echo "ERROR: Failed to add 'needs-audit' label" >&2
+              cat "$LABEL_OUT" >&2
+              exit 1
+            fi
+          fi

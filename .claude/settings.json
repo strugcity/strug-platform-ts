@@ -61,6 +61,24 @@
             "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" prevent-main-root-file-writes.js"
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" prevent-unbounded-experiments.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process'),path=require('path'),fs=require('fs');const m=cp.execSync('git worktree list --porcelain',{encoding:'utf8'}).trim().split(/\\r?\\n/)[0].replace('worktree ','').trim();var d=m,h;while(d){var c=path.join(d,'..','strug-standards','scripts','hook-run.js');if(fs.existsSync(c)){h=c;break;}var p=path.dirname(d);if(p===d)break;d=p;}if(h)require(h);\" confirm-pr-publish.js"
+          }
+        ]
       }
     ],
     "SessionStart": [
