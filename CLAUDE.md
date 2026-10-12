@@ -150,6 +150,18 @@ Never fix from Copilot/AI summaries. Never guess at the error.
 
 Frontend changes require visual verification before review. Protocol: `../strug-standards/standards/visual-test-guidelines.md`
 
+## Agent Experiments (Enforced)
+
+macOS has no working `ulimit -v`; one unbounded probe crashed a 48 GB machine on 2026-10-05.
+
+- Wrap every probe, ad-hoc script and test run you launch: `guard -t <seconds> -m <MB> -- <cmd>` (exit 124 = timeout, 137 = memory). Install once: `sh ../strug-standards/scripts/install-memory-guard.sh`.
+- Start probes whose cost grows with input (recursion, fan-out, generated data) tiny, and grow only while peak RSS stays small.
+- Run python, pytest, jest, vitest and test scripts (`npm test`, `node --test`) in the foreground. Never `nohup`, `&` or `run_in_background` them — a hook denies it.
+- Sub-agents: at most 3 running tests at once; no full suite from a review agent; `/code-review high` by default.
+- Never `gh pr create` or `gh pr merge` unless the user asked for that PR in this conversation.
+
+Detail and the enforcement layers: `../strug-standards/standards/agent-experiment-safety.md`
+
 ## Standards Reference
 
 Full SOP: `../strug-standards/`

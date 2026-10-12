@@ -49,83 +49,333 @@ if [ "$CURRENT_BRANCH" = "main" ]; then
   # Anything else (mixed commit, source files, or an empty commit) is still
   # blocked.
   #
-  # "Sync output" is what the GENERATOR says it writes, not a directory prefix.
-  # The two lists below are rendered into this file by sync-hooks.js from the
-  # same code that writes the files (syncOutputPaths), so a file the generator
-  # does not write cannot be exempt. A prefix also waved through everything
-  # hand-written beside the generated files: dreamTeam tracks
-  # .claude/hooks/session-start.sh and .claude/mcp.json, both executable, under
-  # .claude/ (SCE-3838).
-  #
-  #   hook paths   (.githooks/pre-commit, .githooks/pre-push) — by path AND by
-  #                staged content: the generator header, see below.
-  #   claude paths (.claude/settings.json, .claude/commands/<synced name>) — by
-  #                path. They are JSON/markdown with no header to check. KNOWN
-  #                RESIDUAL: settings.json is merged into the repo's own file,
-  #                so a hand edit to it still commits to main unreviewed.
-  #   .github/workflows/<file> — written by sync-ci.js; by path AND content.
-  #
-  # Workflows are scoped to .github/workflows/, deliberately not .github/.
-  # CODEOWNERS, issue templates and dependabot config sit beside it and are
-  # hand-written policy — precisely what this guard should keep routing through
-  # review.
-  #
-  # "By content" means the STAGED blob has a "# DO NOT EDIT MANUALLY" comment in
-  # its first 5 lines AND is not opted out with a line starting
-  # "# MANAGED-EXTERNALLY" (sync-ci.js stops writing a file so marked, so every
-  # later change to it is a hand edit — the header stays behind below the marker).
-  # sync-ci.js reads the marker after trimStart(), which strips a BOM and leading
-  # whitespace, so this does too. The marker pattern is anchored to a line start
-  # because the generated qa-gate header itself mentions it on line 3. That stops
-  # hand-written files being committed here by accident; it is not a defence
-  # against someone who copies the header in. A deletion has no staged content,
-  # so it is not exempt either.
-  #
-  # --no-renames: without it a staged rename lists only its NEW path, hiding the
-  # deletion of the old one (git mv src/app.js .githooks/app.js looked exempt).
-  #
-  # Fail closed: every test below is a POSITIVE proof that a path is sync output,
-  # and a path that is not proven is listed. So a grep/git that errors can only
-  # add to NON_SYNC. There is deliberately no first-stage `grep -v` feeding the
-  # loop — its failure would be swallowed by `|| true`, leave NON_SYNC empty, and
-  # wave the commit through (SCE-2762's principle: a guard that cannot read its
-  # input must block, not shrug). The `|| true` only absorbs the loop's own exit
-  # status, which is that of whatever ran last. An unrendered list is the same
-  # shape: the placeholder is inside single quotes and matches no path.
-  _SYNC_HOOK_PATHS='.githooks/pre-commit .githooks/pre-push'
-  _SYNC_CLAUDE_PATHS='.claude/settings.json .claude/commands/design-compare.md .claude/commands/dev-session.md .claude/commands/tdd-pr-audit.md .claude/commands/visual-drift-report.md .claude/commands/visual-verification-pipeline.md .claude/commands/visual-verify-setup.md .claude/commands/visual-verify.md'
-  _BOM=$(printf '\357\273\277')
+  # The classification itself — what counts as sync output and how each path is
+  # proven — lives in templates/sync-artifact-classifier.partial and is rendered
+  # here AND into the Husky managed block, so the two hooks cannot disagree
+  # (they did, three times: SCE-2398, SCE-2826, SCE-3838). It sets
+  # _STRUG_SYNC_ONLY to 1 or 0; its comments follow. The placeholder below is a
+  # comment, and the flag is pre-set to 0, so an unrendered hook (or one that
+  # inherits _STRUG_SYNC_ONLY from the environment) blocks cleanly instead of
+  # exempting or dying with "command not found".
+  _STRUG_SYNC_ONLY=0
+# >>> sync-artifact classifier — one definition, rendered into BOTH hook templates >>>
+# Sets _STRUG_SYNC_ONLY to 1 when EVERY staged path is proven strug-standards sync
+# output, else 0. This file is templates/sync-artifact-classifier.partial; it is
+# expanded by sync-hooks.js (renderSyncClassifier) into pre-commit.template and
+# husky-pre-commit-guard.template, so the two cannot drift. They did: three
+# hand-maintained copies of this policy (SCE-2398, SCE-2826, #51) disagreed.
+#
+# "Sync output" is what the GENERATOR says it writes (syncOutputPaths), not a
+# directory prefix. A prefix also waved through everything hand-written beside
+# the generated files: dreamTeam tracks .claude/hooks/session-start.sh and
+# .claude/mcp.json, both executable, under .claude/ (SCE-3838). Every staged path
+# must also be a REGULAR file: a symlink or gitlink at a synced path is never
+# something a generator wrote.
+#
+#   hook paths     (.githooks/pre-commit, .githooks/pre-push) — by path, by mode
+#                  (the sync writes them 100755; git skips a non-executable
+#                  hook) AND by staged content: the generator header, below.
+#   claude paths   (.claude/settings.json, .claude/commands/<synced name>) — by
+#                  path. JSON/markdown has no header to check. KNOWN RESIDUAL:
+#                  settings.json is merged into the repo's own file, so a hand
+#                  edit to it still reads as sync output.
+#   workflow paths (.github/workflows/qa-gate.yml, audit-trigger.yml: the files
+#                  sync-ci.js writes, and only those) — by path AND content.
+#   husky paths    (.husky/pre-commit) — NOT by name alone: the sync rewrites
+#                  only the delimited managed block and leaves every other line
+#                  to the repo. All of these must hold:
+#                    1. the staged blob equals HEAD with the block masked out of
+#                       both, including WHERE the block sat (a block moved below
+#                       a repo-owned `exit` is dead code, not a re-sync). The
+#                       first injection must sit where the injector puts it;
+#                    2. the staged block carries its own digest and still
+#                       matches it, so a stale or hand-edited block in a commit
+#                       is not mistaken for a re-sync;
+#                    3. exactly one well-formed block;
+#                    4. the file's mode is unchanged (Husky v9 sources it).
+#   markdown paths (CLAUDE.md at the repo root) — the same masked comparison, with
+#                  sync-claude-md.js's STRUG-STANDARDS markers (SCE-3221). No
+#                  digest: the block is rendered per project, and what is
+#                  inside it is the same residual as settings.json.
+#
+# WHAT THIS CAN AND CANNOT DEFEND. It decides about the STAGED blob, from inside a
+# hook that is itself a file in the working tree. It cannot defend against the
+# hook it runs in having been edited: a hand-written `exit 0` inside the managed
+# block runs, and the commit passes, before any classification matters. The
+# digest, like the generator header, stops a stale or accidentally edited file
+# arriving in a commit made with an intact hook. Detecting an edited hook is the
+# audit's job (audit-registry.js compares the block byte-for-byte) and CI's.
+# Nor can someone who edits the block AND recomputes its digest by hand be told
+# apart here.
+#
+# "By content" means the STAGED blob has a "# DO NOT EDIT MANUALLY" comment in
+# its first 5 lines AND is not opted out with a line starting
+# "# MANAGED-EXTERNALLY" within those lines (sync-ci.js stops writing a file so
+# marked). sync-ci.js reads the marker after trimStart(), which strips a BOM and
+# leading whitespace, so this does too. The marker is anchored to a line start
+# because the generated qa-gate header itself mentions it on line 3. That stops
+# hand-written files being committed by accident; it is not a defence against
+# someone who copies the header in. A deletion has no staged content, so it is
+# not exempt either.
+#
+# --no-renames: without it a staged rename lists only its NEW path, hiding the
+# deletion of the old one (git mv src/app.js .githooks/app.js looked exempt).
+# --ignore-submodules=none: porcelain `git diff` obeys diff.ignoreSubmodules from
+# any config, and with `all` a staged gitlink bump is never listed at all.
+#
+# Fail closed: every test below is a POSITIVE proof that a path is sync output,
+# and a path that is not proven is listed. A grep/git/awk that errors can only
+# add to the non-sync set. There is deliberately no first-stage `grep -v` feeding
+# the loop — its failure would be swallowed by `|| true`, leave the set empty,
+# and wave the commit through (SCE-2762). The `|| true` only absorbs the loop's
+# own exit status. An unrendered list is the same shape: the placeholder is a
+# single token that matches no path.
+#
+# Cost: one non-sync path decides the answer, so the loop stops at the first. A
+# path on none of the lists is rejected by shell pattern matching alone, with no
+# process spawned; only paths that could be sync output pay for a git call.
+#
+# All names are _strug_-prefixed: this runs inside a hook that also carries
+# repo-owned code (Husky), and must not collide with its variables.
+_strug_sync_hook_paths='.githooks/pre-commit .githooks/pre-push'
+_strug_sync_claude_paths='.claude/settings.json .claude/commands/design-compare.md .claude/commands/dev-session.md .claude/commands/tdd-pr-audit.md .claude/commands/visual-drift-report.md .claude/commands/visual-verification-pipeline.md .claude/commands/visual-verify-setup.md .claude/commands/visual-verify.md'
+_strug_sync_husky_paths='.husky/pre-commit'
+_strug_sync_workflow_paths='.github/workflows/qa-gate.yml .github/workflows/audit-trigger.yml'
+_strug_sync_markdown_paths='CLAUDE.md'
+_strug_bom=$(printf '\357\273\277')
+_strug_tab=$(printf '\t')
 
-  # _strug_listed PATH "LIST" — is PATH one of the space-separated entries?
-  # Whole-line fixed-string match; entries are validated plain paths.
-  _strug_listed() {
-    [ -n "$1" ] && printf '%s\n' $2 | grep -qxF -- "$1"
-  }
+# _strug_in_list PATH "LIST" — is PATH exactly one of the space-separated
+# entries? Pure shell pattern matching: no process, no globbing, no regex. A path
+# containing whitespace is never a member: it could otherwise equal two adjacent
+# entries joined by a space.
+_strug_in_list() {
+  case "$1" in
+    ''|*' '*|*"$_strug_tab"*) return 1 ;;
+  esac
+  case " $2 " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
 
-  # _strug_generated PATH — does the STAGED blob carry the generator header and
-  # not the opt-out marker, within its first 5 lines?
-  _strug_generated() {
-    _h=$(git show ":$1" 2>/dev/null | head -n 5)
-    printf '%s\n' "$_h" | grep -q '^# DO NOT EDIT MANUALLY' \
-      && [ "$(printf '%s\n' "$_h" | grep -cE "^(${_BOM})?[[:space:]]*# MANAGED-EXTERNALLY")" = 0 ]
-  }
+# _strug_generated PATH — does the STAGED blob carry the generator header and not
+# the opt-out marker, within its first 5 lines?
+_strug_generated() {
+  _strug_h=$(git show ":$1" 2>/dev/null | head -n 5)
+  printf '%s\n' "$_strug_h" | grep -q '^# DO NOT EDIT MANUALLY' \
+    && [ "$(printf '%s\n' "$_strug_h" | grep -cE "^(${_strug_bom})?[[:space:]]*# MANAGED-EXTERNALLY")" = 0 ]
+}
 
-  STAGED=$(git diff --cached --no-renames --name-only)
-  NON_SYNC=$(printf '%s\n' "$STAGED" | while IFS= read -r f; do
-    if _strug_listed "$f" "$_SYNC_CLAUDE_PATHS"; then
-      continue
+# _strug_mode PATH — the staged mode of PATH ('' for a deletion). Fails when git
+# cannot answer.
+_strug_mode() {
+  _strug_ls=$(git ls-files -s -- "$1" 2>/dev/null) || return 1
+  printf '%s' "${_strug_ls%% *}"
+}
+
+# _strug_regular PATH — is the staged entry a regular file? A deletion has no
+# index entry and is judged by the per-kind proofs below.
+_strug_regular() {
+  _strug_m=$(_strug_mode "$1") || return 1
+  case "$_strug_m" in
+    ''|100644|100755) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# _strug_mask MIN BEGIN_PREFIX BEGIN_SUFFIX END_PREFIX END_SUFFIX — stdin with the
+# managed region replaced by a position marker. Exits 1 unless the block count is
+# MIN..1 and every BEGIN is closed by an END, so an unterminated BEGIN cannot be
+# used to mask trailing repo-owned lines, and unless no repo-owned line is
+# literally one of the two markers this program emits (typed in by hand, one
+# would read as "unchanged"). A delimiter line is its trimmed text starting with
+# the prefix and ending with the suffix; the husky pair mirrors
+# isHuskyBeginDelimiter/isHuskyEndDelimiter in sync-hooks.js. The callers build
+# the prefixes from split literals on purpose: this text lives INSIDE the managed
+# block in Husky repos, and a delimiter string in the block body would be found
+# by anything that locates the block with a plain substring search.
+_strug_mask() {
+  awk -v min="$1" -v bpre="$2" -v bsuf="$3" -v epre="$4" -v esuf="$5" '
+    function isdelim(s, pre, suf) {
+      if (index(s, pre) != 1) return 0
+      if (suf == "") return 1
+      return length(s) >= length(pre) + length(suf) && substr(s, length(s) - length(suf) + 1) == suf
+    }
+    { t = $0; sub(/^[[:space:]]+/, "", t); sub(/[[:space:]]+$/, "", t) }
+    isdelim(t, bpre, bsuf) { begins++; inb = 1; last = ""; print "@@strug-managed-block@@"; next }
+    isdelim(t, epre, esuf) { ends++; inb = 0; next }
+    inb { next }
+    t == "@@strug-managed-block@@" || t == "@@strug-blank-after-continuation@@" { forged = 1 }
+    # Blank lines are dropped from the comparison: injectHuskyGuard pads a newly
+    # inserted block with one blank line either side, so the first injection into
+    # a hook differs from HEAD by blank lines alone. A blank line is NOT free
+    # after a trailing backslash: there it ends the continued command, so
+    # deleting it changes what runs. Those are kept, as a marker. The marker at
+    # the block position makes WHERE the block sits part of the comparison.
+    t != "" { print; last = $0; sub(/\r$/, "", last); next }
+    last ~ /\\$/ { print "@@strug-blank-after-continuation@@"; last = "" }
+    # Each condition is the ONLY one that catches some malformed shape, and
+    # tests/sync-classifier-pr57-round4.audit.test.js has a case per shape:
+    #   inb            END before BEGIN, then an unterminated BEGIN hiding a payload
+    #   begins != ends a stray second END
+    #   begins > 1     two blocks
+    #   begins < min   the block deleted outright (a hand edit disabling the guard)
+    #   forged         a repo line spelled like a position marker
+    END { if (inb || forged || begins != ends || begins > 1 || begins < min) exit 1 }
+  '
+}
+
+# _strug_insert_block KIND — stdin with a stand-in managed block inserted where
+# the injector would put the FIRST one: husky, immediately after the shebang (or
+# at the top when line 1 is not one); markdown, at the end. Comparing HEAD-with-a-
+# block-inserted against the staged file is what makes the first injection
+# position-checked instead of position-blind.
+_strug_insert_block() {
+  awk -v kind="$1" -v bpre="$2" -v bsuf="$3" -v epre="$4" -v esuf="$5" '
+    { lines[NR] = $0 }
+    END {
+      at = 0
+      if (kind == "markdown") at = NR
+      else if (NR > 0) {
+        l = lines[1]
+        # length() and substr() count in the same unit (bytes or characters,
+        # depending on the awk and locale), so this strips a BOM in either.
+        bom = "\357\273\277"
+        if (index(l, bom) == 1) l = substr(l, 1 + length(bom))
+        if (index(l, "#!") == 1) at = 1
+      }
+      if (at == 0) { print bpre bsuf; print epre esuf }
+      for (i = 1; i <= NR; i++) {
+        print lines[i]
+        if (i == at) { print bpre bsuf; print epre esuf }
+      }
+    }
+  '
+}
+
+# _strug_block_text — stdin: just the managed block, delimiters included, CRs
+# stripped, with the digest line replaced by a fixed token. This is the exact text
+# renderHuskyGuard (sync-hooks.js) digests, so the two must be changed together.
+_strug_block_text() {
+  awk '
+    BEGIN {
+      bpre = "# >>> BEGIN strug-standards" " managed block"
+      epre = "# <<< END strug-standards" " managed block"
+      dpre = "# strug-block" "-digest: "
+    }
+    { line = $0; sub(/\r$/, "", line); t = line; sub(/^[[:space:]]+/, "", t); sub(/[[:space:]]+$/, "", t) }
+    index(t, bpre) == 1 && t ~ />>>$/ { inb = 1 }
+    inb { if (index(line, dpre) == 1 && substr(line, length(dpre) + 1) ~ /^[0-9]+-[0-9]+$/) line = dpre "-"; print line }
+    index(t, epre) == 1 && t ~ /<<<$/ { inb = 0 }
+  '
+}
+
+# _strug_block_intact PATH — does the STAGED block still check out against the
+# digest it carries ("<cksum>-<size>", POSIX cksum of the block text)? cksum, not
+# a git object hash: it is the same on every platform and object format, and one
+# process fewer.
+_strug_block_intact() {
+  _strug_want=$(git show ":$1" 2>/dev/null | tr -d '\r' \
+    | sed -n 's/^# strug-block-digest: \([0-9][0-9]*-[0-9][0-9]*\)$/\1/p' | head -n 1) || return 1
+  _strug_ck=$(git show ":$1" 2>/dev/null | _strug_block_text | cksum) || return 1
+  _strug_got="${_strug_ck%% *}-${_strug_ck##* }"
+  [ -n "$_strug_want" ] && [ "$_strug_want" = "$_strug_got" ]
+}
+
+# _strug_managed_only PATH KIND — is the staged change to PATH confined to the
+# managed region? HEAD may predate the block (first injection); staged must carry
+# exactly one. Nothing at HEAD to compare against is not provable: not exempt.
+_strug_managed_only() {
+  case "$2" in
+    husky)    _strug_bp='# >>> BEGIN strug-standards'' managed block'; _strug_bs='>>>'
+              _strug_ep='# <<< END strug-standards'' managed block';   _strug_es='<<<' ;;
+    markdown) _strug_bp='<!-- STRUG-STANDARDS''-BEGIN:'; _strug_bs=''
+              _strug_ep='<!-- STRUG-STANDARDS''-END -->'; _strug_es='' ;;
+    *) return 1 ;;
+  esac
+  git cat-file -e "HEAD:$1" 2>/dev/null || return 1
+  _strug_new=$(git show ":$1" 2>/dev/null | _strug_mask 1 "$_strug_bp" "$_strug_bs" "$_strug_ep" "$_strug_es") || return 1
+  _strug_old=$(git show "HEAD:$1" 2>/dev/null | _strug_mask 0 "$_strug_bp" "$_strug_bs" "$_strug_ep" "$_strug_es") || return 1
+  case "$_strug_old" in
+    *@@strug-managed-block@@*) ;;
+    *)
+      # HEAD had no block: expect exactly what a first injection produces.
+      _strug_old=$(git show "HEAD:$1" 2>/dev/null \
+        | _strug_insert_block "$2" "$_strug_bp" "$_strug_bs" "$_strug_ep" "$_strug_es" \
+        | _strug_mask 1 "$_strug_bp" "$_strug_bs" "$_strug_ep" "$_strug_es") || return 1
+      ;;
+  esac
+  [ "$_strug_new" = "$_strug_old" ] || return 1
+  [ "$2" = husky ] || return 0
+  _strug_block_intact "$1" || return 1
+  # Mode: Husky v9 sources this file and the sync never changes its mode, so a
+  # mode-only change is a hand edit that the content proofs cannot see.
+  _strug_mn=$(_strug_mode "$1") || return 1
+  _strug_mo=$(git ls-tree HEAD -- "$1" 2>/dev/null) || return 1
+  [ "$_strug_mn" = "${_strug_mo%% *}" ]
+}
+
+# A failed read is recorded, not fatal: under `set -e` (.githooks/pre-commit,
+# Husky v9's `sh -e`) a bare failing assignment ended the hook right here, before
+# the message below it, and before a Husky repo's own guards could run. Empty
+# means "nothing proven", so the commit is not exempt either way.
+_STRUG_SYNC_READ_FAILED=0
+if ! _strug_sync_staged=$(git diff --cached --no-renames --ignore-submodules=none --name-only); then
+  _strug_sync_staged=""
+  _STRUG_SYNC_READ_FAILED=1
+fi
+# _strug_first_non_sync — reads staged paths on stdin and prints the FIRST one not
+# proven to be sync output (and stops): the commit is exempt only if none is. It
+# is a function, not an inline loop in `$( … )`, because bash 3.2 (macOS /bin/sh)
+# cannot parse a `case` whose patterns end in `)` written literally inside a
+# command substitution.
+_strug_first_non_sync() {
+  while IFS= read -r _strug_f; do
+    _strug_kind=""
+    if _strug_in_list "$_strug_f" "$_strug_sync_claude_paths"; then _strug_kind=claude
+    elif _strug_in_list "$_strug_f" "$_strug_sync_husky_paths"; then _strug_kind=husky
+    elif _strug_in_list "$_strug_f" "$_strug_sync_markdown_paths"; then _strug_kind=markdown
+    elif _strug_in_list "$_strug_f" "$_strug_sync_hook_paths"; then _strug_kind=hook
+    elif _strug_in_list "$_strug_f" "$_strug_sync_workflow_paths"; then _strug_kind=workflow
     fi
-    if _strug_listed "$f" "$_SYNC_HOOK_PATHS" \
-       || printf '%s\n' "$f" | grep -qE '^\.github/workflows/'; then
-      if _strug_generated "$f"; then
-        continue
-      fi
+    _strug_ok=0
+    if [ -n "$_strug_kind" ] && _strug_regular "$_strug_f"; then
+      case "$_strug_kind" in
+        claude) _strug_ok=1 ;;
+        husky|markdown) if _strug_managed_only "$_strug_f" "$_strug_kind"; then _strug_ok=1; fi ;;
+        hook)
+          _strug_m=$(_strug_mode "$_strug_f") || _strug_m=""
+          if [ "$_strug_m" = 100755 ] && _strug_generated "$_strug_f"; then _strug_ok=1; fi
+          ;;
+        workflow) if _strug_generated "$_strug_f"; then _strug_ok=1; fi ;;
+      esac
     fi
-    printf '%s\n' "$f"
-  done || true)
-  if [ -n "$STAGED" ] && [ -z "$NON_SYNC" ]; then
+    if [ "$_strug_ok" != 1 ]; then
+      printf '%s\n' "$_strug_f"
+      return 0
+    fi
+  done
+  return 0
+}
+_strug_non_sync=$(printf '%s\n' "$_strug_sync_staged" | _strug_first_non_sync || true)
+if [ -n "$_strug_sync_staged" ] && [ -z "$_strug_non_sync" ]; then
+  _STRUG_SYNC_ONLY=1
+else
+  _STRUG_SYNC_ONLY=0
+fi
+# <<< end sync-artifact classifier <<<
+  if [ "$_STRUG_SYNC_ONLY" = "1" ]; then
     echo "  ✓ sync-artifact commit (generated hooks / synced .claude files / generated workflows only) — allowed on main."
   else
+    if [ "$_STRUG_SYNC_READ_FAILED" = "1" ]; then
+      echo ""
+      echo "  ✗ BLOCKED: the strug-standards guard could not read the staged file list."
+      echo "  'git diff --cached' failed, so whether this is a sync-only commit is"
+      echo "  unknown — refusing to commit to main blind."
+      echo ""
+      exit 1
+    fi
     echo ""
     echo "  ✗ BLOCKED: direct commits to 'main' are not allowed."
     echo "  (Commits touching only files strug-standards generates — .githooks/"
