@@ -366,7 +366,7 @@ else
 fi
 # <<< end sync-artifact classifier <<<
   if [ "$_STRUG_SYNC_ONLY" = "1" ]; then
-    echo "  ✓ sync-artifact commit (generated hooks / synced .claude files / generated workflows only) — allowed on main."
+    echo "  ✓ sync-artifact commit (generated hooks / synced .claude files / generated workflows / the CLAUDE.md standards block only) — allowed on main."
   else
     if [ "$_STRUG_SYNC_READ_FAILED" = "1" ]; then
       echo ""
@@ -380,7 +380,8 @@ fi
     echo "  ✗ BLOCKED: direct commits to 'main' are not allowed."
     echo "  (Commits touching only files strug-standards generates — .githooks/"
     echo "   pre-commit and pre-push, .claude/settings.json, synced .claude/commands,"
-    echo "   and GENERATED workflows under .github/workflows/ — i.e. a re-sync — are"
+    echo "   the generated qa-gate.yml / audit-trigger.yml workflows, and the"
+    echo "   STRUG-STANDARDS block of the repo-root CLAUDE.md — i.e. a re-sync — are"
     echo "   exempt; this commit touches other paths or hand-written files.)"
     echo ""
     echo "  Create a feature branch first:"
